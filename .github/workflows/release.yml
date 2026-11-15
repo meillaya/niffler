@@ -57,10 +57,34 @@ jobs:
           sha256sum niffler.escript > niffler.escript.sha256
           sha256sum build/niffler_precompiled-*.tar > niffler_precompiled.tar.sha256
 
+      - name: Check Hex publication status
+        id: hex
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          STATUS="$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://hex.pm/api/packages/niffler_precompiled/releases/$VERSION")"
+          if [ "$STATUS" = "200" ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "Hex version $VERSION is already published; skipping the publish step."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to Hex
+        if: steps.hex.outputs.published != 'true'
         env:
           HEXPM_API_KEY: ${{ secrets.HEXPM_API_KEY }}
-        run: gleam publish --yes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ -z "${HEXPM_API_KEY:-}" ]; then
+            echo "::error::HEXPM_API_KEY is not configured; cannot publish $VERSION"
+            exit 1
+          fi
+          if [[ "$VERSION" == 0.* ]]; then
+            printf 'I am not using semantic versioning\n' | gleam publish --yes
+          else
+            gleam publish --yes
+          fi
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
