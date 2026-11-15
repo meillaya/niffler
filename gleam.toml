@@ -4,6 +4,10 @@ target = "erlang"
 gleam = ">= 1.19.0"
 licences = ["Apache-2.0"]
 description = "Precompiled Rust NIF distribution for Gleam packages: per-platform artifacts, verified manifests, caching, source fallback, and Hex packaging."
+
+links = [
+  { title = "Repository", href = "https://github.com/meillaya/niffler" },
+]
 [dependencies]
 gleam_stdlib = ">= 1.0.0 and < 2.0.0"
 
