@@ -3,7 +3,7 @@
 # and loaded by a musl Erlang/OTP build.
 set -eu
 
-apk add --no-cache build-base erlang >/dev/null
+apk add --no-cache build-base erlang28 erlang28-dev >/dev/null
 
 INC="$(erl -noshell -eval 'io:format("~s/usr/include",[code:root_dir()]),halt().')"
 cc -fPIC -shared -I"$INC" -o /tmp/demo_nif.so integration/fixtures/c_adder.c
