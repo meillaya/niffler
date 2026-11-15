@@ -7,7 +7,8 @@ manifest, creates the GitHub release, and can optionally publish to Hex.
 
 ## Release assets
 
-A release publishes one tarball per configured target plus the manifest:
+A release publishes one tarball per configured target plus the manifest. With
+the default seven-target configuration the assets are:
 
 ```text
 libdemo_nif-v1.2.3-nif-2.15-x86_64-unknown-linux-gnu.so.tar.gz
@@ -28,9 +29,8 @@ committed copy.
 
 ## Workflow shape
 
-The generated workflow triggers on tags matching `v*` and on
-`workflow_dispatch`. It requests `contents: write`, `id-token: write`, and
-`attestations: write` permissions.
+The generated workflow triggers on tags matching `v*`. It requests
+`contents: write`, `id-token: write`, and `attestations: write` permissions.
 
 ### Build matrix
 
@@ -44,17 +44,19 @@ The generated workflow triggers on tags matching `v*` and on
 | `aarch64-apple-darwin` | `macos-15` | native cargo |
 | `x86_64-pc-windows-msvc` | `windows-2025` | native cargo |
 
+The matrix has a `cross` boolean per entry; the workflow uses it to select the
+cross or native build step, and skips the smoke load for cross entries.
+
 Each matrix job runs on the matching runner, installs Gleam 1.19.2 and OTP 28
 with `erlef/setup-beam@v1` and Rust stable with `dtolnay/rust-toolchain@stable`,
 then:
 
 1. installs `cross` with `cargo install cross --version 0.2.5 --locked` for
    musl targets;
-2. runs `niffler build --target <triple> --dist dist` (with `--use-cross` for
-   musl targets);
-3. smoke-loads the built artifact for native targets with
-   `niffler smoke --artifact <tarball> --module <module>` (cross-built targets
-   are not loaded on the runner);
+2. builds the artifact with `niffler build --target <triple> --dist dist`
+   (adding `--use-cross` for musl targets);
+3. smoke-loads native artifacts only, using
+   `niffler smoke --artifact "$(find dist -maxdepth 1 -name '*.tar.gz' | head -n1)" --module <module>`;
 4. attests the tarball with `actions/attest-build-provenance@v2`;
 5. uploads `dist/*.tar.gz` with `actions/upload-artifact@v4`.
 
@@ -62,6 +64,12 @@ The generated `.cargo/config.toml` in the crate disables static CRT linking
 for the musl targets, which is what `cross` needs to build a loadable
 `cdylib`. If a runner needs extra packages, adjust the generated workflow and
 regenerate it after changing the target list.
+
+Known gap in 0.1.0: cross-built musl artifacts are not smoke-loaded in the
+generated workflow, because the build runner is x86_64 Linux and an Alpine
+userland is not available there. Their integrity is still checked by
+`manifest`, `verify`, and the manifest hash; an Alpine smoke job is a future
+addition.
 
 ### Release job
 
@@ -76,14 +84,13 @@ niffler manifest --dist dist --version "$VERSION" --check
 
 `manifest` requires an artifact for every configured target and checks that
 each artifact filename carries the `gleam.toml` version, so a partial build or
-a version/tag mismatch fails the job. The release job then creates the GitHub
-release with `gh release create "$GITHUB_REF_NAME" dist/*.tar.gz
-priv/niffler.json --generate-notes --draft` and publishes it with
+a tag that disagrees with the package version fails the job before any release
+is created. The release job then creates the GitHub release with
+`gh release create "$GITHUB_REF_NAME" dist/*.tar.gz priv/niffler.json
+--generate-notes --draft` and publishes it with
 `gh release edit ... --draft=false`. Publishing the release only after the
 manifest and assets are attached means a failed build never leaves a
-half-published release. The tag `v<version>` must equal the version in
-`gleam.toml`; a mismatched tag produces a manifest version that the runtime
-rejects with a version mismatch, and the Hex job's version check also fails.
+half-published release.
 
 ### Optional Hex job
 
@@ -103,7 +110,9 @@ and the release remains a GitHub-only release.
 1. Bump the version in `gleam.toml`. If the release changes NIF functions,
    update `niffler.toml` and regenerate the loader.
 2. If the target list changed, run `generate` and commit the workflow update.
-3. Build and verify locally for the host:
+3. Build and verify locally for the host (this assumes `dist/` already contains
+   artifacts for every configured target, for example from a previous full
+   build; otherwise run it in the release job instead):
 
    ```sh
    gleam run -m niffler_precompiled -- build
@@ -121,8 +130,8 @@ and the release remains a GitHub-only release.
    ```
 
 6. Watch the release workflow. When it finishes, the GitHub release contains
-   the seven artifacts and `niffler.json`, and the artifacts have build
-   provenance attestations.
+   one artifact per configured target plus `niffler.json`, and the artifacts
+   have build provenance attestations.
 7. If Hex publishing is enabled, confirm the package version on Hex after the
    job completes.
 

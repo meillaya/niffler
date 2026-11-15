@@ -139,8 +139,8 @@ attestations out of band if your deployment needs provenance beyond that.
 
 ## Operational guidance
 
-- Run `nifler prefetch` during build or deploy, then set `NIFFLER_OFFLINE=1` in
-  production. This removes the first-load network dependency and makes a
+- Run `niffler prefetch` during build or deploy, then set `NIFFLER_OFFLINE=1`
+  in production. This removes the first-load network dependency and makes a
   missing artifact a startup failure rather than a runtime surprise.
 - Keep the cache per deployment, or pin it with `NIFFLER_CACHE_DIR`. Do not
   share a writable cache between users.
@@ -177,6 +177,10 @@ attestations out of band if your deployment needs provenance beyond that.
 - **Platform floors.** Linux gnu artifacts are built on GitHub's Ubuntu runner
   image. Older glibc systems may fail to load them even with a matching triple;
   use musl artifacts or a source build.
+- **No HTTP proxy support.** Downloads go directly through OTP `httpc`; there
+  are no proxy settings in 0.1.0. A deployment behind a proxy should prefetch
+  artifacts and use `NIFFLER_ARTIFACT_DIR` or an image-baked cache instead of
+  relying on runtime downloads.
 - **Native code is trusted once loaded.** Hash verification proves the bytes
   are the ones the author published, not that they are safe. A NIF can do
   anything the OS allows the BEAM process to do.

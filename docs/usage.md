@@ -45,8 +45,8 @@ Exit codes:
 | Code | Meaning |
 | --- | --- |
 | 0 | Success. |
-| 1 | Command failure: a check failed, a build failed, or verification found a problem. |
-| 2 | Usage error: unknown command, unknown subcommand, missing required flag, or a command that needs extra arguments. |
+| 1 | Command failure: a check failed, a build failed, verification found a problem, a required flag is missing, or a flag has no value. |
+| 2 | Usage error: unknown command or subcommand, or a subcommand missing its required options (for example `cache clean` without `--all`/`--package`). |
 
 ## `init`
 
@@ -62,7 +62,8 @@ the release download source.
 | `--repo <OWNER/REPO>` | required | GitHub repository that hosts release assets. |
 | `--crate <NAME>` | `<package>_nif` | Rust crate name. |
 | `--module <NAME>` | the crate name | NIF module name passed to `rustler::init!`. |
-| `--functions <LIST>` | `add/2` | Comma-separated `name/arity` list, for example `add/2,version/0`. || `--targets <LIST>` | all seven | Comma-separated target triples to build and publish. |
+| `--functions <LIST>` | `add/2` | Comma-separated `name/arity` list, for example `add/2,version/0`. |
+| `--targets <LIST>` | all seven | Comma-separated target triples to build and publish. |
 | `--no-example` | off | Do not generate the worked `add/2` example function. |
 | `--force` | off | Overwrite files that already exist. |
 | `--dry-run` | off | Print the files that would be written without writing them. |
@@ -118,8 +119,9 @@ Builds the Rust crate and packages the result as canonical artifacts.
 
 The build always runs `cargo build --release --locked --target <triple>
 --manifest-path priv/native/<crate>/Cargo.toml --target-dir <root>/dist/target`.
-A `Cargo.lock` is required because of `--locked`; `init` generates one. The
-effective NIF version is read from the Rustler version selected by
+Release mode is always used; a `--release` flag is accepted but does not change
+the profile. A `Cargo.lock` is required because of `--locked`; `init` generates
+one. The effective NIF version is read from the Rustler version selected by
 `cargo tree` (the highest `nif_version_2_XX` feature); when that cannot be
 detected, the configured `nif_version` or the default 2.15 is used.
 
@@ -168,7 +170,7 @@ of the inner NIF library (the value recorded in the manifest).
 ## `manifest`
 
 ```text
-niffler manifest [--dist DIR] [--base-url URL] [--version VERSION] [--check] [--json]
+niffler manifest [--dist DIR] [--base-url URL] [--version VERSION] [--check] [--json] [--allow-insecure]
 ```
 
 Recomputes `priv/niffler.json` from the canonical tarballs in `dist/`. Package
@@ -180,7 +182,7 @@ harness and local HTTP fixtures.
 | --- | --- | --- |
 | `--dist <DIR>` | `<root>/dist` | Directory containing canonical artifact tarballs. |
 | `--base-url <URL>` | config or GitHub | Prefix used to build artifact download URLs. |
-| `--version <VERSION>` | `gleam.toml` version | Package version to record. |
+| `--version <VERSION>` | `gleam.toml` version | Package version to record. It must match the `gleam.toml` version and the artifact filenames; the generated release workflow passes the tag value here. |
 | `--check` | off | Do not write; exit 1 if the committed manifest differs or artifacts are missing. |
 | `--json` | off | Print the manifest to stdout and do not write a file. |
 | `--allow-insecure` | off | Permit an `http://` base URL in the manifest. Test-only; the loader still needs `NIFFLER_ALLOW_INSECURE_URLS=1` and loopback to download it. |
@@ -205,17 +207,18 @@ as a CI gate. See [design](design.md) for the schema.
 ## `verify`
 
 ```text
-niffler verify --dist DIR [--manifest PATH] [--online]
+niffler verify [--dist DIR] [--manifest PATH] [--online]
 ```
 
-Every artifact in the manifest must have a matching tarball in `--dist`, the
-tarball must contain exactly one `<crate>.<ext>` member, and that member's
-SHA-256 and size must match the manifest. Failures are printed as
+Every artifact in the manifest must have a matching tarball in the dist
+directory, the tarball must contain exactly one `<crate>.<ext>` member, and
+that member's SHA-256 and size must match the manifest. Failures are printed as
 `FAIL <file>: <reason>` and the command exits 1.
 
-`--online` downloads artifacts through the same HTTP code the runtime uses and
-verifies the extracted library's SHA-256. When a `--dist` tarball is missing,
-`--online` falls back to the download URL, so the two options can be combined.
+`--online` verifies artifacts that are missing from the local dist directory by
+downloading them through the same HTTP code the runtime uses and hashing the
+extracted library. Without downloaded or local tarballs, offline verification
+fails for those artifacts.
 
 `--manifest` defaults to `priv/niffler.json` and `--dist` defaults to
 `<root>/dist`.
@@ -233,7 +236,7 @@ does not need the network.
 | --- | --- | --- |
 | `--manifest <PATH>` | `priv/niffler.json` | Manifest to read. |
 | `--all` | off | Download every artifact instead of only the current platform's. |
-| `--to-dir <DIR>` | cache root | Write flat `<sha256>.<so\|dll>` files to DIR instead of the cache. |
+| `--to-dir <DIR>` | off (write to cache) | Write flat `<sha256>.<so\|dll>` files to DIR instead of the cache. |
 
 Without `--all`, the current target and runtime NIF version are used to select
 one artifact. Extracted libraries are named by the manifest SHA-256, so a
@@ -301,8 +304,9 @@ Loads a packaged artifact in a temporary Erlang VM:
 3. runs `erl -noshell -pa <dir> -eval "<module>:niffler_smoke(), halt(0)."`.
 
 `--artifact` selects the tarball; without it, the first `.tar.gz` in `dist/` is
-used, so pass `--artifact` when the directory contains several targets.
-`--module` overrides the loader name when `niffler.toml` is not available.
+used, so pass `--artifact` when the directory contains several targets. The
+artifact must be loadable in the local VM (build the host target or use a
+matching container). `--module` overrides the loader name from `niffler.toml`.
 Failure exits 1. Requires `erlc` and `erl` on `PATH`. `niffler build` runs the
 same smoke load automatically for host builds.
 
@@ -327,7 +331,7 @@ Runs the pre-publish gate. It checks that:
   `Cargo.lock`;
 - `gleam export hex-tarball` succeeds and the produced Hex tarball is under
   the 16 MiB compressed limit (with a warning above 8 MiB), stays under the
-  128 MiB uncompressed limit, has fewer than 10,000 entries and no path longer
+  128 MiB uncompressed limit, has at most 10,000 entries and no path longer
   than 255 bytes, has `VERSION`, `metadata.config`, `contents.tar.gz`, and
   `CHECKSUM`, names the package/version and `gleam` in its metadata, contains
   `priv/niffler.json`, `priv/native/<crate>/Cargo.toml`,
@@ -338,14 +342,21 @@ Runs the pre-publish gate. It checks that:
 `--online` additionally downloads every artifact and verifies the extracted
 library hash. It does not query Hex for name or version availability.
 
+`hex check` normalises `priv/niffler.json` before exporting: it re-encodes the
+manifest it is validating (from `--manifest`, default `priv/niffler.json`) and
+writes that back to `priv/niffler.json`. The write is idempotent when the file
+already matches, and it guarantees the exported tarball contains exactly the
+manifest that is being validated.
+
 ## `hex emit`
 
 ```text
 niffler hex emit [--manifest PATH] [--output PATH]
 ```
 
-Runs the `hex check` validations, exports the Hex tarball again with
-`gleam export hex-tarball`, and copies it to
+Runs the `hex check` validations, writes the validated manifest into
+`priv/niffler.json` (an explicit `--manifest` overrides the committed file),
+exports the Hex tarball with `gleam export hex-tarball`, and copies it to
 `dist/hex/<package>-<version>.tar` with a `.sha256` file next to it. The
 output path can be overridden with `--output`. The command prints the tarball
 path, its SHA-256, and the `gleam publish --yes` step. It never uploads.
@@ -360,7 +371,7 @@ role.
 | `NIFFLER_CACHE_DIR` | runtime, `cache` | Cache root. Defaults to the OS user cache directory for `niffler` (`$XDG_CACHE_HOME/niffler` or `~/.cache/niffler` on Linux, `~/Library/Caches/niffler` on macOS, LocalAppData on Windows). |
 | `NIFFLER_ARTIFACT_DIR` | runtime | Path list (colon-separated on Unix, semicolon-separated on Windows) of directories containing flat `<sha256>.<so\|dll>` extracted libraries. Checked before the cache and downloads; may be read-only. Every hit is hashed against the manifest. |
 | `NIFFLER_OFFLINE` | runtime | `1` or `true` disables all network access for the runtime loader. A missing artifact then fails instead of downloading. |
-| `NIFFLER_BUILD` | runtime | `1` or `true` enables the opt-in source build of the bundled crate when no artifact is available. |
+| `NIFFLER_BUILD` | runtime | `1` or `true` builds the bundled crate with `cargo` instead of resolving precompiled artifacts. |
 | `NIFFLER_BASE_URL` | runtime | Replaces the manifest base URL prefix when the loader builds an artifact URL. Hashes are still verified. |
 | `NIFFLER_ALLOW_INSECURE_URLS` | runtime, CLI downloads | `1` permits plain HTTP only for loopback hosts. Test-only; never use it in production. |
 | `NIFFLER_CACERTS` | runtime, CLI downloads | Path to a PEM CA bundle used for HTTPS. Defaults to the OS CA store via `public_key:cacerts_get()`. |
@@ -416,7 +427,7 @@ name the package where relevant.
 | No artifact for the target | Check the package's target list; enable `NIFFLER_BUILD=1` on unsupported platforms. |
 | No compatible NIF version | Upgrade Erlang/OTP, use a package version that ships a compatible artifact, or enable `NIFFLER_BUILD=1`. |
 | Artifact missing while offline | Run `niffler prefetch` first, or provide `NIFFLER_ARTIFACT_DIR`. |
-| HTTP/network/status error | Check connectivity, proxy, and the release URL; retry. |
+| HTTP/network/status error | Check connectivity and the release URL, then retry. There is no HTTP proxy support in 0.1.0. |
 | Checksum or size mismatch | The download is rejected; run `niffler cache clean` and retry. Do not ignore it. |
 | Archive invalid | The release asset is malformed or not from this package; reinstall or report it. |
 | Cache write failure | Check permissions and free space, or set `NIFFLER_CACHE_DIR` to a writable directory. |

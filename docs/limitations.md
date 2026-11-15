@@ -120,6 +120,28 @@ loading. The generated workflow builds with the default Rust MSVC toolchain and
 does not sign the DLL. Code signing and Windows Defender reputation are not
 handled.
 
+## Tooling limits in 0.1.0
+
+- There are no global `--verbose` or `--quiet` flags. Only `manifest` has
+  `--json`; `doctor` and `hex check` print plain text.
+- HTTP proxy configuration is not implemented. Downloads use OTP `httpc`
+  directly, so deployments behind a proxy need a transparent proxy or a
+  pre-populated cache/artifact directory.
+- `verify --online` downloads and hashes whole artifacts; it does not send HEAD
+  requests or use partial downloads.
+- `build --release` is accepted but release mode is always used. `build` has no
+  `--nif-version`: it reads the effective version from the Rustler Cargo
+  features and falls back to `[nif] nif_version` or 2.15. `package` does accept
+  `--nif-version`.
+- The generated release workflow smoke-loads native builds only. Cross-built
+  musl artifacts are packaged, manifest-verified, and attested, but not loaded
+  by that generated workflow.
+- `hex check --online` verifies that artifact URLs serve the pinned bytes; it
+  does not query Hex for name or version availability.
+- `cache clean` requires `--all` or `--package <name>`; `cache list` prints
+  paths only, without sizes.
+- `doctor` reports problems but exits 0, and has no JSON output.
+
 ## Not a build system
 
 niffler does not replace `cargo`, `rustler`, or `gleam`. It generates a

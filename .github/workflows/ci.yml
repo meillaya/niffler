@@ -99,3 +99,14 @@ jobs:
           else
             echo "integration/rust.sh is not present yet; skipping"
           fi
+
+  musl-smoke:
+    name: musl smoke / alpine
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and load a musl NIF in Alpine
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work alpine:3.22 \
+            sh integration/musl.sh

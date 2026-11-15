@@ -55,6 +55,13 @@ bash integration/run.sh   # CLI, manifest, cache, and Hex packaging fixtures
 bash integration/rust.sh  # Rust build and source-fallback fixtures
 ```
 
+A musl load check runs a small C NIF inside Alpine:
+
+```sh
+docker run --rm -v "$PWD:/work" -w /work alpine:3.22 \
+  sh integration/musl.sh
+```
+
 The integration scripts need `gleam`, `erl`/`erlc`, and Python 3 on `PATH`, plus
 `cc`, `jq`, and `tar`; `integration/run.sh` also needs `cargo` for `init`'s
 `Cargo.lock` generation. `integration/rust.sh` needs `cargo` and `rustc` and
@@ -70,6 +77,9 @@ offline mode, a read-only `NIFFLER_ARTIFACT_DIR`, tampered-artifact rejection,
 `verify`, `smoke`, `generate --check`, `doctor`, actionlint on the generated
 workflow, and `hex check`/`hex emit`. `integration/rust.sh` verifies the
 `NIFFLER_BUILD=1` source fallback, including its offline cache hit.
+`integration/musl.sh` builds a C NIF with Alpine's toolchain and loads it with
+the Alpine Erlang/OTP build, proving the musl path; CI runs it in the
+`musl-smoke` job through an `alpine:3.22` container.
 
 CI also runs `actionlint` on `.github/workflows/*.yml` and `shellcheck` on
 shell scripts (through `nix shell`).
@@ -152,8 +162,8 @@ niffler itself is released from tags:
    `src/niffler_precompiled.gleam`, and the `version()` literal in
    `src/niffler_precompiled/cli.gleam`.
 2. Update `CHANGELOG.md`.
-3. Run the checks above and `bash integration/run.sh` locally; make sure CI is
-   green.
+3. Run the checks above, `bash integration/run.sh`, and `bash integration/rust.sh`
+   locally; make sure CI is green.
 4. Commit, then tag and push:
 
    ```sh

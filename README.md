@@ -5,12 +5,10 @@ Precompiled Rust NIF distribution for Gleam packages.
 niffler is the Gleam analogue of Elixir's `rustler_precompiled`. A package
 author builds per-platform NIF artifacts once in CI, publishes a manifest of
 SHA-256 hashes inside the Hex package, and Gleam users load the verified
-artifact with no Mix, no Elixir, and no Rust toolchain. Compiled libraries are
-served from GitHub Releases; only the manifest and, optionally, the Rust crate
-source travel inside Hex.
-
-The Hex package is `niffler_precompiled`. The CLI and escript are called
-`niffler`.
+artifact with no Mix, no Elixir, and no Rust toolchain. The Hex package also
+carries the Rust crate source (required for source fallback); the compiled
+libraries themselves are downloaded from the release host at runtime. The Hex
+package is `niffler_precompiled`; the CLI and escript are called `niffler`.
 
 ## For package users
 
@@ -21,9 +19,9 @@ gleam add my_package
 ```
 
 On first load the generated loader downloads the artifact for the current
-platform, verifies its SHA-256 against `priv/niffler.json`, extracts it into a
-per-user cache, and calls `erlang:load_nif/2`. A hash mismatch fails closed;
-nothing is loaded.
+platform, validates and extracts it, verifies the extracted NIF's SHA-256
+against `priv/niffler.json`, caches it, and calls `erlang:load_nif/2`. A hash
+mismatch fails closed; nothing is loaded.
 
 Production and container deploys should populate the cache ahead of time and
 run offline:
@@ -53,8 +51,8 @@ gleam publish
 
 `init` also generates `.github/workflows/niffler-release.yml`. Pushing a
 `v<version>` tag builds all configured targets, writes the manifest, publishes
-the artifact assets on the GitHub release, and optionally publishes to Hex
-when a `HEXPM_API_KEY` secret is configured. See
+the artifact assets on the GitHub release, and optionally publishes to Hex when
+a `HEXPM_API_KEY` secret and `NIFFLER_PUBLISH_HEX=true` variable are set. See
 [authoring](docs/authoring.md), [releasing](docs/releasing.md), and
 [design](docs/design.md).
 

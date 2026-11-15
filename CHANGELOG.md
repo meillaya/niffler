@@ -38,9 +38,15 @@
   consistency, required `priv/` contents, absence of compiled libraries, the
   `gleam export hex-tarball` structure and checksum, and Hex size limits.
   `hex emit` writes the publishable tarball without uploading.
-- Generated release workflow with a seven-target build matrix, smoke tests,
-  GitHub build provenance attestations, a draft-then-publish GitHub release,
-  and an optional Hex job gated by `NIFFLER_PUBLISH_HEX` and `HEXPM_API_KEY`.
-- Nix flake and devenv shell, packaged CLI escript, and cross-platform CI for
-  OTP 28/29.
+- Generated release workflow with a seven-target build matrix (musl targets
+  built through `cross`), native smoke tests, GitHub build provenance
+  attestations, a draft-then-publish GitHub release, and an optional Hex job
+  gated by `NIFFLER_PUBLISH_HEX` and `HEXPM_API_KEY`.
+- Nix flake and devenv shell, packaged CLI escript, a tag-driven release
+  workflow for this repository, and cross-platform CI for OTP 28/29, including
+  an Alpine container smoke check for musl.
+- Integration suites for the no-Rust C NIF path (scaffolding, packaging,
+  manifest, download and hash verification, cache, offline mode, read-only
+  artifact directories, tamper rejection, smoke, verify, Hex check/emit) and
+  the `NIFFLER_BUILD=1` Rust source fallback.
 - Apache-2.0 licence.

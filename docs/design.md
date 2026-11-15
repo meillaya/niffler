@@ -59,7 +59,7 @@ Unknown tables and keys are rejected. The parser is a small in-package TOML
 reader; arrays, basic strings, literal strings, integers, and booleans are
 supported, nested tables and arrays of tables are not.
 
-## Manifest: `priv/nifler.json`
+## Manifest: `priv/niffler.json`
 
 The schema version is 1. The encoded file is deterministic: JSON object keys
 are sorted, artifacts are sorted by target then NIF version, and the file ends
@@ -190,9 +190,10 @@ Supported NIF versions and their OTP floors:
 | 2.18 | OTP 29+ |
 
 Rustler 0.39's default is 2.15, which is what `build` records unless the crate
-activates a newer `nif_version_2_XX` feature or `niffler.toml` sets
-`nif_version`. Shipping 2.15 first keeps the package usable on the widest OTP
-range; newer versions are opt-in for crates that need newer NIF APIs.
+activates a newer `nif_version_2_XX` feature. `niffler.toml`'s `nif_version`
+is the fallback when feature detection fails, and the default for `package`.
+Shipping 2.15 first keeps the package usable on the widest OTP range; newer
+versions are opt-in for crates that need newer NIF APIs.
 
 ## Generated loader
 

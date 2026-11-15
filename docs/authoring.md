@@ -53,7 +53,7 @@ priv/native/<crate>/src/lib.rs
 priv/native/<crate>/README.md
 priv/native/<crate>/.cargo/config.toml
 src/<module>.erl
-rust-toolchain.toml
+rust-toolchain.toml                       (project root)
 .github/workflows/niffler-release.yml
 ```
 
@@ -251,8 +251,11 @@ The check builds the real Hex tarball with `gleam export hex-tarball` and
 inspects it: metadata, licences, README, the required `priv/` and `src/` files,
 absence of compiled libraries, the 16 MiB compressed limit, and the recomputed
 Hex checksum. It also checks that `niffler.toml`, `priv/niffler.json`,
-`gleam.toml`, the loader, and the Rust crate agree. `hex check --online` also
-downloads every artifact and verifies the inner NIF hash.
+`gleam.toml`, the loader, and the Rust crate agree. It first re-encodes the
+manifest it is validating into `priv/niffler.json` (idempotent when already in
+sync), so the tarball contains exactly the validated manifest.
+`hex check --online` also downloads every artifact and verifies the inner NIF
+hash.
 
 To produce the publishable tarball explicitly:
 
@@ -260,8 +263,12 @@ To produce the publishable tarball explicitly:
 gleam run -m niffler_precompiled -- hex emit
 ```
 
-It writes `dist/hex/<package>-<version>.tar` and a `.sha256` file, and prints
-the publish command. It never uploads.
+`hex emit` runs the same validations, writes the validated manifest into
+`priv/niffler.json`, exports the tarball, and writes
+`dist/hex/<package>-<version>.tar` plus a `.sha256` file. It prints the publish
+command and never uploads. `--manifest <path>` lets CI emit using the manifest
+downloaded from the GitHub release instead of the committed copy; the emitted
+tarball always contains the manifest that was validated.
 
 ## 10. Publish
 
