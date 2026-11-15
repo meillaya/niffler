@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GLEAM_VERSION: "1.19.2"
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / OTP ${{ matrix.otp }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        otp: ["28", "29"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp }}
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Download dependencies
+        run: gleam deps download
+
+      - name: Check formatting
+        run: gleam format --check src test
+
+      - name: Build with warnings as errors
+        run: gleam build --warnings-as-errors
+
+      - name: Unit tests
+        run: gleam test
+
+  integration:
+    name: Integration / linux
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "28"
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Download dependencies
+        run: gleam deps download
+
+      - name: Build
+        run: gleam build --warnings-as-errors
+
+      - name: Integration tests
+        shell: bash
+        run: |
+          if [ -f integration/run.sh ]; then
+            bash integration/run.sh
+          else
+            echo "integration/run.sh is not present yet; skipping"
+          fi
+
+  rust-integration:
+    name: Rust integration / linux
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "28"
+          gleam-version: ${{ env.GLEAM_VERSION }}
+
+      - name: Check Rust toolchain
+        run: rustc --version && cargo --version
+
+      - name: Download dependencies
+        run: gleam deps download
+
+      - name: Build
+        run: gleam build --warnings-as-errors
+
+      - name: Rust integration tests
+        shell: bash
+        run: |
+          if [ -f integration/rust.sh ]; then
+            bash integration/rust.sh
+          else
+            echo "integration/rust.sh is not present yet; skipping"
+          fi
